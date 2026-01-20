@@ -1,40 +1,42 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
-interface TimeSlotsProps {
-  slots: { time: string; available: boolean }[]
+type Slot = {
+  time: string;       // pode vir "2026-01-20T13:30:00"
+  available: boolean;
+}
+
+type Props = {
+  slots: Slot[]
   selectedTime: string | null
   onSelect: (time: string) => void
 }
 
-export function TimeSlots({ slots, selectedTime, onSelect }: TimeSlotsProps) {
-  if (slots.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        Nenhum horário disponível para esta data.
-      </div>
-    )
-  }
-  
+function formatSlotLabel(time: string) {
+  // Se vier ISO LocalDateTime: "YYYY-MM-DDTHH:mm:ss"
+  if (time.includes('T')) return time.substring(11, 16) // "HH:mm"
+  return time // fallback
+}
+
+export function TimeSlots({ slots, selectedTime, onSelect }: Props) {
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-      {slots.map(slot => (
-        <button
-          key={slot.time}
-          type="button"
-          disabled={!slot.available}
-          onClick={() => slot.available && onSelect(slot.time)}
-          className={cn(
-            "py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 border",
-            slot.available && selectedTime !== slot.time && "border-border bg-card hover:border-primary text-foreground",
-            !slot.available && "border-border/50 bg-secondary/50 text-muted-foreground/50 cursor-not-allowed line-through",
-            selectedTime === slot.time && "border-primary bg-primary text-primary-foreground"
-          )}
-        >
-          {slot.time}
-        </button>
-      ))}
+    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+      {slots.map((slot) => {
+        const label = formatSlotLabel(slot.time)
+
+        return (
+          <Button
+            key={slot.time}
+            type="button"
+            variant={selectedTime === slot.time ? 'default' : 'outline'}
+            disabled={!slot.available}
+            onClick={() => onSelect(slot.time)}
+          >
+            {label}
+          </Button>
+        )
+      })}
     </div>
   )
 }

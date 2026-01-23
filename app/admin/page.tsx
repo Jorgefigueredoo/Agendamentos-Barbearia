@@ -5,16 +5,15 @@ import { useRouter } from "next/navigation";
 import { adminApi, type AdminAgendamento } from "@/lib/adminApi";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
-function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 function hhmm(iso: string) {
   return iso?.includes("T") ? iso.substring(11, 16) : iso;
+}
+
+function ddmmyyyy(iso: string) {
+  if (!iso) return "";
+  const datePart = iso.split("T")[0]; // YYYY-MM-DD
+  const [y, m, d] = datePart.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 function statusBadge(status: AdminAgendamento["status"]) {
@@ -28,15 +27,16 @@ function statusBadge(status: AdminAgendamento["status"]) {
 export default function AdminPage() {
   const router = useRouter();
 
-  const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<AdminAgendamento[]>([]);
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // range: today | 7d | 30d | all
+  const [range, setRange] = useState<"today" | "7d" | "30d" | "all">("today");
+
+  // filtros locais
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "TODOS" | AdminAgendamento["status"]
-  >("TODOS");
+  const [statusFilter, setStatusFilter] = useState<"TODOS" | AdminAgendamento["status"]>("TODOS");
 
   function requireAuth() {
     const token = localStorage.getItem("token");
@@ -54,7 +54,7 @@ export default function AdminPage() {
     setErro("");
 
     try {
-      const data = await adminApi.agendaDoDia(date);
+      const data = await adminApi.agenda(range);
       setItems(data);
     } catch (e: any) {
       setErro(e?.message || "Erro ao carregar agendamentos");
@@ -67,10 +67,11 @@ export default function AdminPage() {
     }
   }
 
+  // recarrega quando mudar o range
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [range]);
 
   const filtered = useMemo(() => {
     let list = [...items];
@@ -95,28 +96,33 @@ export default function AdminPage() {
     return list;
   }, [items, q, statusFilter]);
 
+  const pendentes = filtered.filter((x) => x.status === "PENDENTE").length;
+
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar />
 
-      {/* ✅ igual ao Serviços */}
       <main className="lg:ml-64 pt-14 lg:pt-0 p-6 max-w-4xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Agendamentos</h1>
             <div className="text-sm opacity-70">
-              Total: {filtered.length} • Pendentes:{" "}
-              {filtered.filter((x) => x.status === "PENDENTE").length}
+              Total: {filtered.length} • Pendentes: {pendentes}
             </div>
           </div>
 
           <div className="flex gap-2 items-center">
-            <input
-              className="border rounded p-2 bg-background"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <select
+              className="border rounded p-2 bg-background w-56"
+              value={range}
+              onChange={(e) => setRange(e.target.value as any)}
+            >
+              <option value="today">Hoje</option>
+              <option value="7d">Próximos 7 dias</option>
+              <option value="30d">Próximos 30 dias</option>
+              <option value="all">Todos</option>
+            </select>
+
             <button className="border rounded p-2" onClick={load}>
               Atualizar
             </button>
@@ -125,7 +131,6 @@ export default function AdminPage() {
 
         {erro && <div className="text-red-600 text-sm">{erro}</div>}
 
-        {/* Filtros (igual estética de Serviços) */}
         <div className="border rounded p-3 bg-card flex gap-2">
           <input
             className="border rounded p-2 bg-background flex-1"
@@ -146,7 +151,6 @@ export default function AdminPage() {
           </select>
         </div>
 
-        {/* LISTA (mesmo padrão do serviços: space-y-2) */}
         {loading ? (
           <div className="text-sm opacity-70">Carregando...</div>
         ) : (
@@ -156,13 +160,10 @@ export default function AdminPage() {
               const canCancel = a.status !== "CANCELADO";
 
               return (
-                <div
-                  key={a.id}
-                  className="border rounded p-3 flex items-center justify-between"
-                >
+                <div key={a.id} className="border rounded p-3 flex items-center justify-between">
                   <div>
                     <div className="font-medium">
-                      {hhmm(a.startTime)} • {a.clientName} ({a.clientPhone})
+                      {ddmmyyyy(a.startTime)} • {hhmm(a.startTime)} • {a.clientName} ({a.clientPhone})
                     </div>
 
                     <div className="text-sm opacity-80 flex items-center gap-2">
@@ -172,8 +173,7 @@ export default function AdminPage() {
 
                       <span
                         className={
-                          "ml-2 px-2 py-0.5 rounded-full text-xs font-medium " +
-                          statusBadge(a.status)
+                          "ml-2 px-2 py-0.5 rounded-full text-xs font-medium " + statusBadge(a.status)
                         }
                       >
                         {a.status}

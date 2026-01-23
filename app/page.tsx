@@ -1,85 +1,131 @@
-import { Header } from '@/components/header'
-import { BookingForm } from '@/components/booking-form'
-import { Scissors, MapPin, Phone, Clock } from 'lucide-react'
+"use client";
 
-export default function HomePage() {
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { adminApi, type AdminAgendamento } from "@/lib/adminApi";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
+
+
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function hhmm(iso: string) {
+  return iso?.includes("T") ? iso.substring(11, 16) : iso;
+}
+
+export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [date, setDate] = useState(todayISO());
+  const [items, setItems] = useState<AdminAgendamento[]>([]);
+  const [erro, setErro] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function requireAuth() {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/admin/login");
+      return false;
+    }
+    return true;
+  }
+
+  async function load() {
+    if (!requireAuth()) return;
+
+    setLoading(true);
+    setErro("");
+    try {
+      const data = await adminApi.agendaDoDia(date);
+      setItems(data);
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao carregar agenda");
+      // token inválido/expirado → volta pro login
+      if (String(e?.message || "").includes("401") || String(e?.message || "").includes("403")) {
+        localStorage.removeItem("token");
+        router.push("/admin/login");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      
-      {/* Hero Section */}
-      <section className="relative py-16 md:py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent" />
-        <div className="container mx-auto px-4 relative">
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
-              <Scissors className="w-4 h-4" />
-              Agendamento Online
-            </div>
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4 text-balance">
-              Estilo e Tradição em Cada Corte
-            </h1>
-            <p className="text-lg text-muted-foreground mb-8 text-pretty">
-              Reserve seu horário de forma rápida e prática. 
-              Atendimento personalizado com os melhores profissionais.
-            </p>
+      <AdminSidebar />
+
+      <main className="lg:ml-64 pt-14 lg:pt-0 p-6 max-w-4xl mx-auto space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Agendamentos</h1>
+          <div className="flex gap-2 items-center">
+            <input
+              className="border rounded p-2 bg-background"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <button className="border rounded p-2" onClick={load}>
+              Atualizar
+            </button>
           </div>
         </div>
-      </section>
-      
-      {/* Booking Section */}
-      <section className="py-12 md:py-16">
-        <div className="container mx-auto px-4">
-          <BookingForm />
-        </div>
-      </section>
-      
-      {/* Info Section */}
-      <section className="py-12 md:py-16 bg-card/50">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                <MapPin className="w-6 h-6 text-primary" />
+
+        {erro && <div className="text-red-600 text-sm">{erro}</div>}
+
+        {loading ? (
+          <div className="text-sm opacity-70">Carregando...</div>
+        ) : (
+          <div className="space-y-2">
+            {items.map((a) => (
+              <div key={a.id} className="border rounded p-3 flex items-center justify-between">
+                <div>
+                  <div className="font-medium">
+                    {a.clientName} ({a.clientPhone})
+                  </div>
+                  <div className="text-sm opacity-80">
+                    {hhmm(a.startTime)} • {a.servicoNome} • <span className="font-medium">{a.status}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    className="border rounded px-3 py-1"
+                    onClick={async () => {
+                      await adminApi.confirmar(a.id);
+                      load();
+                    }}
+                  >
+                    Confirmar
+                  </button>
+
+                  <button
+                    className="border rounded px-3 py-1"
+                    onClick={async () => {
+                      await adminApi.cancelar(a.id);
+                      load();
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
-              <h3 className="font-medium text-foreground mb-2">Localização</h3>
-              <p className="text-sm text-muted-foreground">
-                Rua das Barbearias, 123<br />
-                Centro - São Paulo, SP
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                <Phone className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="font-medium text-foreground mb-2">Contato</h3>
-              <p className="text-sm text-muted-foreground">
-                (11) 99999-9999<br />
-                contato@barbershop.com
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="font-medium text-foreground mb-2">Horário</h3>
-              <p className="text-sm text-muted-foreground">
-                Seg - Sex: 09h às 19h<br />
-                Sábado: 09h às 17h
-              </p>
-            </div>
+            ))}
+
+            {items.length === 0 && (
+              <div className="text-sm opacity-70">Sem agendamentos para este dia.</div>
+            )}
           </div>
-        </div>
-      </section>
-      
-      {/* Footer */}
-      <footer className="py-6 border-t border-border">
-        <div className="container mx-auto px-4">
-          <p className="text-center text-sm text-muted-foreground">
-            © 2026 Barber Shop. Todos os direitos reservados.
-          </p>
-        </div>
-      </footer>
+        )}
+      </main>
     </div>
-  )
+  );
 }

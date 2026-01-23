@@ -1,243 +1,146 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { 
-  getAppointments, 
-  getServices, 
-  updateAppointmentStatus,
-  deleteAppointment 
-} from '@/lib/store'
-import type { Appointment, Service } from '@/lib/types'
-import { Calendar, Check, X, Trash2, Clock, User, Phone } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { adminApi, type AdminAgendamento } from "@/lib/adminApi";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
-type FilterStatus = 'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
-export default function AdminAppointmentsPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [services, setServices] = useState<Service[]>([])
-  const [filter, setFilter] = useState<FilterStatus>('all')
-  const [dateFilter, setDateFilter] = useState<string>('')
+function hhmm(iso: string) {
+  return iso?.includes("T") ? iso.substring(11, 16) : iso;
+}
 
-  const loadData = () => {
-    setAppointments(getAppointments())
-    setServices(getServices())
-  }
+export default function AdminPage() {
+  const router = useRouter();
+  const [date, setDate] = useState(todayISO());
+  const [items, setItems] = useState<AdminAgendamento[]>([]);
+  const [erro, setErro] = useState("");
+  const [loading, setLoading] = useState(false);
 
+  const [ready, setReady] = useState(false); // ✅ só carrega depois de validar token
+
+  // ✅ 1) Guard: roda UMA vez
   useEffect(() => {
-    loadData()
-  }, [])
+    const token = localStorage.getItem("token");
+    console.log("TOKEN NO /admin:", token);
 
-  const getServiceName = (serviceId: string) => {
-    return services.find(s => s.id === serviceId)?.name || 'Serviço não encontrado'
-  }
+    if (!token) {
+      router.replace("/admin/login");
+      return;
+    }
 
-  const handleStatusChange = (id: string, status: Appointment['status']) => {
-    updateAppointmentStatus(id, status)
-    loadData()
-  }
+    setReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este agendamento?')) {
-      deleteAppointment(id)
-      loadData()
+  // ✅ 2) Carregamento: roda quando date muda, mas só se ready=true
+  useEffect(() => {
+    if (!ready) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, date]);
+
+  async function load() {
+    setLoading(true);
+    setErro("");
+
+    try {
+      const data = await adminApi.agendaDoDia(date);
+      setItems(data);
+    } catch (e: any) {
+      const msg = e?.message || "Erro ao carregar agenda";
+      setErro(msg);
+
+      // ✅ só volta pro login se realmente for token inválido
+      if (msg.includes("401") || msg.includes("403")) {
+        localStorage.removeItem("token");
+        router.replace("/admin/login");
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T12:00:00')
-    return date.toLocaleDateString('pt-BR', {
-      weekday: 'short',
-      day: '2-digit',
-      month: '2-digit'
-    })
-  }
-
-  const filteredAppointments = appointments
-    .filter(a => filter === 'all' || a.status === filter)
-    .filter(a => !dateFilter || a.date === dateFilter)
-    .sort((a, b) => {
-      // Sort by date and time
-      const dateCompare = a.date.localeCompare(b.date)
-      if (dateCompare !== 0) return dateCompare
-      return a.time.localeCompare(b.time)
-    })
-
-  const statusColors: Record<Appointment['status'], string> = {
-    pending: 'bg-yellow-500/20 text-yellow-500',
-    confirmed: 'bg-blue-500/20 text-blue-500',
-    completed: 'bg-green-500/20 text-green-500',
-    cancelled: 'bg-red-500/20 text-red-500'
-  }
-
-  const statusLabels: Record<Appointment['status'], string> = {
-    pending: 'Pendente',
-    confirmed: 'Confirmado',
-    completed: 'Concluído',
-    cancelled: 'Cancelado'
-  }
-
-  const todayStr = new Date().toISOString().split('T')[0]
-  const todayAppointments = appointments.filter(a => a.date === todayStr && a.status !== 'cancelled')
-  const pendingCount = appointments.filter(a => a.status === 'pending').length
-
   return (
-    <div className="p-6">
-      <div className="mb-8">
-        <h1 className="font-serif text-2xl font-bold text-foreground">Agendamentos</h1>
-        <p className="text-muted-foreground">Gerencie os agendamentos da barbearia</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <AdminSidebar />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-card rounded-lg border border-border p-4">
-          <p className="text-sm text-muted-foreground">Hoje</p>
-          <p className="text-2xl font-bold text-foreground">{todayAppointments.length}</p>
-        </div>
-        <div className="bg-card rounded-lg border border-border p-4">
-          <p className="text-sm text-muted-foreground">Pendentes</p>
-          <p className="text-2xl font-bold text-yellow-500">{pendingCount}</p>
-        </div>
-        <div className="bg-card rounded-lg border border-border p-4">
-          <p className="text-sm text-muted-foreground">Esta Semana</p>
-          <p className="text-2xl font-bold text-foreground">
-            {appointments.filter(a => {
-              const aptDate = new Date(a.date)
-              const today = new Date()
-              const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-              return aptDate >= weekAgo && a.status !== 'cancelled'
-            }).length}
-          </p>
-        </div>
-        <div className="bg-card rounded-lg border border-border p-4">
-          <p className="text-sm text-muted-foreground">Total</p>
-          <p className="text-2xl font-bold text-foreground">{appointments.length}</p>
-        </div>
-      </div>
+      <main className="lg:ml-64 pt-14 lg:pt-0 p-6 max-w-4xl mx-auto space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Agendamentos</h1>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 mb-6">
-        <div className="flex gap-2">
-          {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as const).map(status => (
-            <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                filter === status 
-                  ? "bg-primary text-primary-foreground" 
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-              )}
-            >
-              {status === 'all' ? 'Todos' : statusLabels[status]}
+          <div className="flex gap-2 items-center">
+            <input
+              className="border rounded p-2 bg-background"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+
+            <button className="border rounded p-2" onClick={load} disabled={!ready}>
+              Atualizar
             </button>
-          ))}
+          </div>
         </div>
-        <input
-          type="date"
-          value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-sm border-0"
-        />
-        {dateFilter && (
-          <button
-            onClick={() => setDateFilter('')}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Limpar filtro
-          </button>
-        )}
-      </div>
 
-      {/* Appointments List */}
-      {filteredAppointments.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>Nenhum agendamento encontrado</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredAppointments.map(appointment => (
-            <div 
-              key={appointment.id}
-              className="bg-card rounded-lg border border-border p-4"
-            >
-              <div className="flex flex-col md:flex-row md:items-center gap-4">
-                <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-foreground font-medium">{appointment.clientName}</span>
+        {!ready ? (
+          <div className="text-sm opacity-70">Validando acesso...</div>
+        ) : erro ? (
+          <div className="text-red-600 text-sm">{erro}</div>
+        ) : null}
+
+        {loading ? (
+          <div className="text-sm opacity-70">Carregando...</div>
+        ) : (
+          <div className="space-y-2">
+            {items.map((a) => (
+              <div key={a.id} className="border rounded p-3 flex items-center justify-between">
+                <div>
+                  <div className="font-medium">
+                    {a.clientName} ({a.clientPhone})
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{appointment.clientPhone}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-foreground">{formatDate(appointment.date)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-foreground">{appointment.time}</span>
+                  <div className="text-sm opacity-80">
+                    {hhmm(a.startTime)} • {a.servicoNome} • <b>{a.status}</b>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-primary font-medium">
-                    {getServiceName(appointment.serviceId)}
-                  </span>
-                  <span className={cn("px-2 py-1 rounded text-xs font-medium", statusColors[appointment.status])}>
-                    {statusLabels[appointment.status]}
-                  </span>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  {appointment.status === 'pending' && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleStatusChange(appointment.id, 'confirmed')}
-                        className="h-8"
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleStatusChange(appointment.id, 'cancelled')}
-                        className="h-8 text-destructive hover:text-destructive"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </>
-                  )}
-                  {appointment.status === 'confirmed' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleStatusChange(appointment.id, 'completed')}
-                      className="h-8"
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      Concluir
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDelete(appointment.id)}
-                    className="h-8 text-destructive hover:text-destructive"
+                <div className="flex gap-2">
+                  <button
+                    className="border rounded px-3 py-1"
+                    onClick={async () => {
+                      await adminApi.confirmar(a.id);
+                      load();
+                    }}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                    Confirmar
+                  </button>
+
+                  <button
+                    className="border rounded px-3 py-1"
+                    onClick={async () => {
+                      await adminApi.cancelar(a.id);
+                      load();
+                    }}
+                  >
+                    Cancelar
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+
+            {items.length === 0 && (
+              <div className="text-sm opacity-70">Sem agendamentos para este dia.</div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
-  )
+  );
 }

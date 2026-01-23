@@ -1,37 +1,37 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { cn } from '@/lib/utils'
-import { logoutAdmin } from '@/lib/store'
-import { 
-  Scissors, 
-  Calendar, 
-  Clock, 
-  Package, 
-  CalendarOff, 
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import {
+  Scissors,
+  Calendar,
+  Package,
   LogOut,
   Menu,
-  X
-} from 'lucide-react'
-import { useState } from 'react'
+  X,
+} from "lucide-react";
+import { useState } from "react";
 
 const menuItems = [
-  { href: '/admin', label: 'Agendamentos', icon: Calendar },
-  { href: '/admin/services', label: 'Serviços', icon: Package },
-  { href: '/admin/hours', label: 'Horários', icon: Clock },
-  { href: '/admin/blocked', label: 'Dias Bloqueados', icon: CalendarOff },
-]
+  { href: "/admin", label: "Agendamentos", icon: Calendar },
+  { href: "/admin/servicos", label: "Serviços", icon: Package },
+
+  // Quando você criar essas páginas, pode reativar:
+  // { href: "/admin/horarios", label: "Horários", icon: Clock },
+  // { href: "/admin/bloqueios", label: "Dias Bloqueados", icon: CalendarOff },
+];
 
 export function AdminSidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const pathname = usePathname();
+  const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => {
-    logoutAdmin()
-    router.push('/admin/login')
-  }
+    // logout real: remove token
+    localStorage.removeItem("token");
+    router.replace("/admin/login");
+  };
 
   const SidebarContent = () => (
     <>
@@ -41,7 +41,9 @@ export function AdminSidebar() {
             <Scissors className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-serif text-lg font-bold text-sidebar-foreground">Barber Shop</h1>
+            <h1 className="font-serif text-lg font-bold text-sidebar-foreground">
+              Barber Shop
+            </h1>
             <p className="text-xs text-muted-foreground">Painel Admin</p>
           </div>
         </Link>
@@ -49,8 +51,8 @@ export function AdminSidebar() {
 
       <nav className="flex-1 p-4">
         <ul className="space-y-1">
-          {menuItems.map(item => {
-            const isActive = pathname === item.href
+          {menuItems.map((item) => {
+            const isActive = pathname === item.href;
             return (
               <li key={item.href}>
                 <Link
@@ -58,8 +60,8 @@ export function AdminSidebar() {
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    isActive 
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/50"
                   )}
                 >
@@ -67,7 +69,7 @@ export function AdminSidebar() {
                   {item.label}
                 </Link>
               </li>
-            )
+            );
           })}
         </ul>
       </nav>
@@ -79,6 +81,7 @@ export function AdminSidebar() {
         >
           Ver Site
         </Link>
+
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
@@ -88,7 +91,7 @@ export function AdminSidebar() {
         </button>
       </div>
     </>
-  )
+  );
 
   return (
     <>
@@ -98,11 +101,15 @@ export function AdminSidebar() {
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
             <Scissors className="w-4 h-4 text-primary-foreground" />
           </div>
-          <span className="font-serif font-bold text-sidebar-foreground">Barber Shop</span>
+          <span className="font-serif font-bold text-sidebar-foreground">
+            Barber Shop
+          </span>
         </Link>
+
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
           className="p-2 text-sidebar-foreground"
+          aria-label="Abrir menu"
         >
           {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -111,7 +118,10 @@ export function AdminSidebar() {
       {/* Mobile Sidebar */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMobileOpen(false)}
+          />
           <div className="absolute top-14 left-0 bottom-0 w-64 bg-sidebar flex flex-col">
             <SidebarContent />
           </div>
@@ -123,5 +133,5 @@ export function AdminSidebar() {
         <SidebarContent />
       </aside>
     </>
-  )
+  );
 }

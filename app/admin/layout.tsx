@@ -1,36 +1,29 @@
 'use client'
 
-import React from "react"
-
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from "react"
 import { useRouter, usePathname } from 'next/navigation'
-import { isAdminLoggedIn } from '@/lib/store'
 import { AdminSidebar } from '@/components/admin/admin-sidebar'
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [isChecking, setIsChecking] = useState(true)
 
   useEffect(() => {
-    // Skip auth check for login page
     if (pathname === '/admin/login') {
       setIsChecking(false)
       return
     }
 
-    if (!isAdminLoggedIn()) {
-      router.push('/admin/login')
-    } else {
-      setIsChecking(false)
+    const token = localStorage.getItem("token")
+    if (!token) {
+      router.replace('/admin/login')
+      return
     }
+
+    setIsChecking(false)
   }, [pathname, router])
 
-  // Login page doesn't need sidebar
   if (pathname === '/admin/login') {
     return <>{children}</>
   }

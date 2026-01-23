@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminApi, type AdminAgendamento } from "@/lib/adminApi";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
 function todayISO() {
   const d = new Date();
@@ -16,34 +17,39 @@ function hhmm(iso: string) {
   return iso?.includes("T") ? iso.substring(11, 16) : iso;
 }
 
+function statusBadge(status: AdminAgendamento["status"]) {
+  if (status === "CONFIRMADO")
+    return "bg-green-500/15 text-green-400 border border-green-500/30";
+  if (status === "CANCELADO")
+    return "bg-red-500/15 text-red-300 border border-red-500/30";
+  return "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30";
+}
+
 export default function AdminPage() {
   const router = useRouter();
+
   const [date, setDate] = useState(todayISO());
   const [items, setItems] = useState<AdminAgendamento[]>([]);
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
 
-  // ✅ Guard: verifica auth UMA vez
-  useEffect(() => {
+  const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "TODOS" | AdminAgendamento["status"]
+  >("TODOS");
+
+  function requireAuth() {
     const token = localStorage.getItem("token");
-    
     if (!token) {
       router.replace("/admin/login");
-      return;
+      return false;
     }
-
-    setReady(true);
-  }, [router]);
-
-  // ✅ Carrega dados quando ready=true
-  useEffect(() => {
-    if (!ready) return;
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, date]);
+    return true;
+  }
 
   async function load() {
+    if (!requireAuth()) return;
+
     setLoading(true);
     setErro("");
 
@@ -51,10 +57,8 @@ export default function AdminPage() {
       const data = await adminApi.agendaDoDia(date);
       setItems(data);
     } catch (e: any) {
-      const msg = e?.message || "Erro ao carregar agenda";
-      setErro(msg);
-
-      if (msg.includes("401") || msg.includes("403")) {
+      setErro(e?.message || "Erro ao carregar agendamentos");
+      if (String(e?.message || "").includes("401") || String(e?.message || "").includes("403")) {
         localStorage.removeItem("token");
         router.replace("/admin/login");
       }
@@ -63,79 +67,155 @@ export default function AdminPage() {
     }
   }
 
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Validando acesso...</div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
+  const filtered = useMemo(() => {
+    let list = [...items];
+
+    if (statusFilter !== "TODOS") {
+      list = list.filter((a) => a.status === statusFilter);
+    }
+
+    const query = q.trim().toLowerCase();
+    if (query) {
+      list = list.filter((a) => {
+        return (
+          a.clientName?.toLowerCase().includes(query) ||
+          a.clientPhone?.toLowerCase().includes(query) ||
+          a.servicoNome?.toLowerCase().includes(query) ||
+          a.barbeiroNome?.toLowerCase().includes(query)
+        );
+      });
+    }
+
+    list.sort((a, b) => (a.startTime > b.startTime ? 1 : -1));
+    return list;
+  }, [items, q, statusFilter]);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Agendamentos</h1>
+    <div className="min-h-screen bg-background">
+      <AdminSidebar />
 
-        <div className="flex gap-2 items-center">
+      {/* ✅ igual ao Serviços */}
+      <main className="lg:ml-64 pt-14 lg:pt-0 p-6 max-w-4xl mx-auto space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold">Agendamentos</h1>
+            <div className="text-sm opacity-70">
+              Total: {filtered.length} • Pendentes:{" "}
+              {filtered.filter((x) => x.status === "PENDENTE").length}
+            </div>
+          </div>
+
+          <div className="flex gap-2 items-center">
+            <input
+              className="border rounded p-2 bg-background"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <button className="border rounded p-2" onClick={load}>
+              Atualizar
+            </button>
+          </div>
+        </div>
+
+        {erro && <div className="text-red-600 text-sm">{erro}</div>}
+
+        {/* Filtros (igual estética de Serviços) */}
+        <div className="border rounded p-3 bg-card flex gap-2">
           <input
-            className="border rounded p-2 bg-background"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            className="border rounded p-2 bg-background flex-1"
+            placeholder="Buscar por nome, telefone, serviço..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
           />
 
-          <button className="border rounded p-2" onClick={load}>
-            Atualizar
-          </button>
+          <select
+            className="border rounded p-2 bg-background w-44"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+          >
+            <option value="TODOS">Todos</option>
+            <option value="PENDENTE">Pendente</option>
+            <option value="CONFIRMADO">Confirmado</option>
+            <option value="CANCELADO">Cancelado</option>
+          </select>
         </div>
-      </div>
 
-      {erro && <div className="text-red-600 text-sm">{erro}</div>}
+        {/* LISTA (mesmo padrão do serviços: space-y-2) */}
+        {loading ? (
+          <div className="text-sm opacity-70">Carregando...</div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map((a) => {
+              const canConfirm = a.status === "PENDENTE";
+              const canCancel = a.status !== "CANCELADO";
 
-      {loading ? (
-        <div className="text-sm opacity-70">Carregando...</div>
-      ) : (
-        <div className="space-y-2">
-          {items.map((a) => (
-            <div key={a.id} className="border rounded p-3 flex items-center justify-between">
-              <div>
-                <div className="font-medium">
-                  {a.clientName} ({a.clientPhone})
-                </div>
-                <div className="text-sm opacity-80">
-                  {hhmm(a.startTime)} • {a.servicoNome} • <b>{a.status}</b>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  className="border rounded px-3 py-1"
-                  onClick={async () => {
-                    await adminApi.confirmar(a.id);
-                    load();
-                  }}
+              return (
+                <div
+                  key={a.id}
+                  className="border rounded p-3 flex items-center justify-between"
                 >
-                  Confirmar
-                </button>
+                  <div>
+                    <div className="font-medium">
+                      {hhmm(a.startTime)} • {a.clientName} ({a.clientPhone})
+                    </div>
 
-                <button
-                  className="border rounded px-3 py-1"
-                  onClick={async () => {
-                    await adminApi.cancelar(a.id);
-                    load();
-                  }}
-                >
-                  Cancelar
-                </button>
+                    <div className="text-sm opacity-80 flex items-center gap-2">
+                      <span>{a.servicoNome}</span>
+                      <span>•</span>
+                      <span className="text-muted-foreground">{a.barbeiroNome}</span>
+
+                      <span
+                        className={
+                          "ml-2 px-2 py-0.5 rounded-full text-xs font-medium " +
+                          statusBadge(a.status)
+                        }
+                      >
+                        {a.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      className="border rounded px-3 py-1 disabled:opacity-40"
+                      disabled={!canConfirm}
+                      onClick={async () => {
+                        await adminApi.confirmar(a.id);
+                        load();
+                      }}
+                    >
+                      Confirmar
+                    </button>
+
+                    <button
+                      className="border rounded px-3 py-1 disabled:opacity-40"
+                      disabled={!canCancel}
+                      onClick={async () => {
+                        await adminApi.cancelar(a.id);
+                        load();
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {filtered.length === 0 && (
+              <div className="text-sm opacity-70">
+                Nenhum agendamento encontrado para os filtros selecionados.
               </div>
-            </div>
-          ))}
-
-          {items.length === 0 && (
-            <div className="text-sm opacity-70">Sem agendamentos para este dia.</div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

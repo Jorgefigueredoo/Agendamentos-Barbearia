@@ -70,8 +70,8 @@ export type AdminServico = {
 };
 
 export const adminApi = {
-  agendaDoDia: (date: string) =>
-    http<AdminAgendamento[]>(`/admin/agendamentos?date=${encodeURIComponent(date)}`),
+  agenda: (range: "today" | "7d" | "30d" | "all") =>
+  http<AdminAgendamento[]>(`/admin/agendamentos?range=${range}`),
 
   confirmar: (id: number) => http(`/admin/agendamentos/${id}/confirmar`, { method: "PATCH" }),
   cancelar: (id: number) => http(`/admin/agendamentos/${id}/cancelar`, { method: "PATCH" }),

@@ -73,21 +73,16 @@ export const adminApi = {
   agendaDoDia: (date: string) =>
     http<AdminAgendamento[]>(`/admin/agendamentos?date=${encodeURIComponent(date)}`),
 
-  confirmar: (id: number) =>
-    http(`/admin/agendamentos/${id}/confirmar`, { method: "PATCH" }),
+  confirmar: (id: number) => http(`/admin/agendamentos/${id}/confirmar`, { method: "PATCH" }),
+  cancelar: (id: number) => http(`/admin/agendamentos/${id}/cancelar`, { method: "PATCH" }),
 
-  cancelar: (id: number) =>
-    http(`/admin/agendamentos/${id}/cancelar`, { method: "PATCH" }),
+  listarServicos: () => http<AdminServico[]>(`/admin/servicos`),
 
-  // ✅ ADICIONADO: endpoints de serviços
-  listarServicos: () =>
-    http<AdminServico[]>("/admin/servicos"),
+  criarServico: (payload: { name: string; durationMin: number; priceCents: number; active?: boolean }) =>
+    http<AdminServico>(`/admin/servicos`, { method: "POST", body: JSON.stringify(payload) }),
 
-  criarServico: (payload: { name: string; durationMin: number; priceCents: number }) =>
-    http<AdminServico>("/admin/servicos", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+  atualizarServico: (id: number, payload: { name: string; durationMin: number; priceCents: number; active?: boolean }) =>
+    http<AdminServico>(`/admin/servicos/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
 
   toggleServico: (id: number) =>
     http<AdminServico>(`/admin/servicos/${id}/toggle-active`, { method: "PATCH" }),

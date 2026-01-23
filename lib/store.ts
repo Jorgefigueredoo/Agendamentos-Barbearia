@@ -137,14 +137,16 @@ export function removeBlockedDate(id: string): void {
   saveBlockedDates(dates)
 }
 
-// Auth
+// Auth - ✅ CORRIGIDO: agora verifica localStorage (onde o token está salvo)
 export function validateAdmin(username: string, password: string): boolean {
   return username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password
 }
 
 export function isAdminLoggedIn(): boolean {
   if (typeof window === 'undefined') return false
-  return sessionStorage.getItem('barber_admin_logged') === 'true'
+  // ✅ MUDANÇA AQUI: verifica se existe token no localStorage
+  const token = localStorage.getItem('token')
+  return !!token // retorna true se houver token
 }
 
 export function loginAdmin(): void {
@@ -154,7 +156,9 @@ export function loginAdmin(): void {
 
 export function logoutAdmin(): void {
   if (typeof window === 'undefined') return
+  // ✅ remove tanto do sessionStorage quanto localStorage
   sessionStorage.removeItem('barber_admin_logged')
+  localStorage.removeItem('token')
 }
 
 // Time slots

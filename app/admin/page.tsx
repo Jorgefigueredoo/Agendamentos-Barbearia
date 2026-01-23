@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminApi, type AdminAgendamento } from "@/lib/adminApi";
-import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
 function todayISO() {
   const d = new Date();
@@ -23,24 +22,21 @@ export default function AdminPage() {
   const [items, setItems] = useState<AdminAgendamento[]>([]);
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  const [ready, setReady] = useState(false); // ✅ só carrega depois de validar token
-
-  // ✅ 1) Guard: roda UMA vez
+  // ✅ Guard: verifica auth UMA vez
   useEffect(() => {
     const token = localStorage.getItem("token");
-    console.log("TOKEN NO /admin:", token);
-
+    
     if (!token) {
       router.replace("/admin/login");
       return;
     }
 
     setReady(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router]);
 
-  // ✅ 2) Carregamento: roda quando date muda, mas só se ready=true
+  // ✅ Carrega dados quando ready=true
   useEffect(() => {
     if (!ready) return;
     load();
@@ -58,7 +54,6 @@ export default function AdminPage() {
       const msg = e?.message || "Erro ao carregar agenda";
       setErro(msg);
 
-      // ✅ só volta pro login se realmente for token inválido
       if (msg.includes("401") || msg.includes("403")) {
         localStorage.removeItem("token");
         router.replace("/admin/login");
@@ -68,79 +63,79 @@ export default function AdminPage() {
     }
   }
 
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Validando acesso...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background">
-      <AdminSidebar />
+    <div className="p-6 max-w-4xl mx-auto space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Agendamentos</h1>
 
-      <main className="lg:ml-64 pt-14 lg:pt-0 p-6 max-w-4xl mx-auto space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Agendamentos</h1>
+        <div className="flex gap-2 items-center">
+          <input
+            className="border rounded p-2 bg-background"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
 
-          <div className="flex gap-2 items-center">
-            <input
-              className="border rounded p-2 bg-background"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-
-            <button className="border rounded p-2" onClick={load} disabled={!ready}>
-              Atualizar
-            </button>
-          </div>
+          <button className="border rounded p-2" onClick={load}>
+            Atualizar
+          </button>
         </div>
+      </div>
 
-        {!ready ? (
-          <div className="text-sm opacity-70">Validando acesso...</div>
-        ) : erro ? (
-          <div className="text-red-600 text-sm">{erro}</div>
-        ) : null}
+      {erro && <div className="text-red-600 text-sm">{erro}</div>}
 
-        {loading ? (
-          <div className="text-sm opacity-70">Carregando...</div>
-        ) : (
-          <div className="space-y-2">
-            {items.map((a) => (
-              <div key={a.id} className="border rounded p-3 flex items-center justify-between">
-                <div>
-                  <div className="font-medium">
-                    {a.clientName} ({a.clientPhone})
-                  </div>
-                  <div className="text-sm opacity-80">
-                    {hhmm(a.startTime)} • {a.servicoNome} • <b>{a.status}</b>
-                  </div>
+      {loading ? (
+        <div className="text-sm opacity-70">Carregando...</div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((a) => (
+            <div key={a.id} className="border rounded p-3 flex items-center justify-between">
+              <div>
+                <div className="font-medium">
+                  {a.clientName} ({a.clientPhone})
                 </div>
-
-                <div className="flex gap-2">
-                  <button
-                    className="border rounded px-3 py-1"
-                    onClick={async () => {
-                      await adminApi.confirmar(a.id);
-                      load();
-                    }}
-                  >
-                    Confirmar
-                  </button>
-
-                  <button
-                    className="border rounded px-3 py-1"
-                    onClick={async () => {
-                      await adminApi.cancelar(a.id);
-                      load();
-                    }}
-                  >
-                    Cancelar
-                  </button>
+                <div className="text-sm opacity-80">
+                  {hhmm(a.startTime)} • {a.servicoNome} • <b>{a.status}</b>
                 </div>
               </div>
-            ))}
 
-            {items.length === 0 && (
-              <div className="text-sm opacity-70">Sem agendamentos para este dia.</div>
-            )}
-          </div>
-        )}
-      </main>
+              <div className="flex gap-2">
+                <button
+                  className="border rounded px-3 py-1"
+                  onClick={async () => {
+                    await adminApi.confirmar(a.id);
+                    load();
+                  }}
+                >
+                  Confirmar
+                </button>
+
+                <button
+                  className="border rounded px-3 py-1"
+                  onClick={async () => {
+                    await adminApi.cancelar(a.id);
+                    load();
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {items.length === 0 && (
+            <div className="text-sm opacity-70">Sem agendamentos para este dia.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

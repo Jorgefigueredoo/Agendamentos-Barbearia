@@ -40,10 +40,8 @@ export async function login(email: string, senha: string) {
     throw new Error(`Login falhou (${res.status}): ${text}`);
   }
 
-  // importante: converte
   const data = text ? JSON.parse(text) : null;
 
-  // garante que veio token
   if (!data?.token) {
     throw new Error("Login OK, mas não veio 'token' na resposta.");
   }
@@ -62,6 +60,15 @@ export type AdminAgendamento = {
   endTime: string;
 };
 
+// ✅ ADICIONADO: tipo que estava faltando
+export type AdminServico = {
+  id: number;
+  name: string;
+  durationMin: number;
+  priceCents: number;
+  active: boolean;
+};
+
 export const adminApi = {
   agendaDoDia: (date: string) =>
     http<AdminAgendamento[]>(`/admin/agendamentos?date=${encodeURIComponent(date)}`),
@@ -71,4 +78,17 @@ export const adminApi = {
 
   cancelar: (id: number) =>
     http(`/admin/agendamentos/${id}/cancelar`, { method: "PATCH" }),
+
+  // ✅ ADICIONADO: endpoints de serviços
+  listarServicos: () =>
+    http<AdminServico[]>("/admin/servicos"),
+
+  criarServico: (payload: { name: string; durationMin: number; priceCents: number }) =>
+    http<AdminServico>("/admin/servicos", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  toggleServico: (id: number) =>
+    http<AdminServico>(`/admin/servicos/${id}/toggle-active`, { method: "PATCH" }),
 };

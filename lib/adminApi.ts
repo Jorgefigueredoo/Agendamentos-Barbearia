@@ -69,6 +69,15 @@ export type AdminServico = {
   active: boolean;
 };
 
+export type HorarioTrabalho = {
+  id: number;
+  dayOfWeek: number;
+  startTime: string; // "09:00:00" ou "09:00"
+  endTime: string;
+  active: boolean;
+  barber: { id: number; name: string };
+};
+
 export const adminApi = {
   agenda: (range: "today" | "7d" | "30d" | "all") =>
   http<AdminAgendamento[]>(`/admin/agendamentos?range=${range}`),
@@ -86,4 +95,17 @@ export const adminApi = {
 
   toggleServico: (id: number) =>
     http<AdminServico>(`/admin/servicos/${id}/toggle-active`, { method: "PATCH" }),
+
+   listarBarbeiros: () => http<{ id: number; name: string }[]>(`/barbers`),
+
+  listarHorarios: (barberId: number) =>
+    http<HorarioTrabalho[]>(`/admin/horarios?barberId=${barberId}`),
+
+  salvarHorario: (payload: {
+    barberId: number;
+    dayOfWeek: number;
+    startTime: string; // "09:00:00"
+    endTime: string;   // "18:00:00"
+    active: boolean;
+  }) => http(`/admin/horarios`, { method: "POST", body: JSON.stringify(payload) }),
 };

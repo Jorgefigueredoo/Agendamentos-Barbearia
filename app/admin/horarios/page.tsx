@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminApi, type HorarioTrabalho } from "@/lib/adminApi";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
@@ -30,6 +30,59 @@ function requireAuthOrRedirect(router: ReturnType<typeof useRouter>) {
     return false;
   }
   return true;
+}
+
+/** ✅ Input de hora + botão visível para abrir o picker */
+function TimeInput({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  const openPicker = () => {
+    const el = ref.current;
+    if (!el) return;
+
+    // Chrome/Edge (Chromium)
+    // @ts-ignore
+    if (typeof el.showPicker === "function") {
+      // @ts-ignore
+      el.showPicker();
+      return;
+    }
+
+    // fallback geral
+    el.focus();
+    el.click();
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        ref={ref}
+        className="border rounded p-2 bg-background w-32 pr-10"
+        type="time"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+      />
+
+      <button
+        type="button"
+        onClick={openPicker}
+        className="border rounded px-3 py-2 bg-background hover:opacity-90 active:opacity-80"
+        aria-label={`Escolher ${ariaLabel}`}
+        title="Escolher horário"
+      >
+        🕒
+      </button>
+    </div>
+  );
 }
 
 export default function AdminHorariosPage() {
@@ -80,12 +133,10 @@ export default function AdminHorariosPage() {
 
       const next: Record<number, Row> = {};
 
-      // defaults
       DAYS.forEach((d) => {
         next[d.n] = { start: "09:00", end: "18:00", active: true };
       });
 
-      // aplica valores do backend
       h.forEach((row) => {
         next[row.dayOfWeek] = {
           start: (row.startTime || "09:00:00").substring(0, 5),
@@ -143,7 +194,6 @@ export default function AdminHorariosPage() {
       console.log("[SALVAR] payload:", payload);
 
       const resp = await adminApi.salvarHorario(payload);
-
       console.log("[SALVAR] resposta:", resp);
 
       await loadHorarios(barberId);
@@ -204,28 +254,26 @@ export default function AdminHorariosPage() {
                   <div className="font-medium w-28">{d.label}</div>
 
                   <div className="flex flex-wrap gap-2 items-center flex-1 min-w-0">
-                    <input
-                      className="border rounded p-2 bg-background w-32"
-                      type="time"
+                    <TimeInput
                       value={row.start}
-                      onChange={(e) =>
+                      ariaLabel={`horário inicial de ${d.label}`}
+                      onChange={(v) =>
                         setForm((prev) => ({
                           ...prev,
-                          [d.n]: { ...prev[d.n], start: e.target.value },
+                          [d.n]: { ...prev[d.n], start: v },
                         }))
                       }
                     />
 
                     <span className="opacity-70">até</span>
 
-                    <input
-                      className="border rounded p-2 bg-background w-32"
-                      type="time"
+                    <TimeInput
                       value={row.end}
-                      onChange={(e) =>
+                      ariaLabel={`horário final de ${d.label}`}
+                      onChange={(v) =>
                         setForm((prev) => ({
                           ...prev,
-                          [d.n]: { ...prev[d.n], end: e.target.value },
+                          [d.n]: { ...prev[d.n], end: v },
                         }))
                       }
                     />

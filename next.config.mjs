@@ -6,7 +6,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
- 
-}
 
-export default nextConfig
+  // ✅ remove completamente o ícone "N" (Dev Indicator)
+  devIndicators: false,
+};
+
+export default nextConfig;

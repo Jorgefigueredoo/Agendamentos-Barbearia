@@ -7,6 +7,7 @@ import {
   Scissors,
   Calendar,
   Package,
+  Clock,
   LogOut,
   Menu,
   X,
@@ -16,10 +17,7 @@ import { useState } from "react";
 const menuItems = [
   { href: "/admin", label: "Agendamentos", icon: Calendar },
   { href: "/admin/servicos", label: "Serviços", icon: Package },
-
-  // Quando você criar essas páginas, pode reativar:
-  // { href: "/admin/horarios", label: "Horários", icon: Clock },
-  // { href: "/admin/bloqueios", label: "Dias Bloqueados", icon: CalendarOff },
+  { href: "/admin/horarios", label: "Horários", icon: Clock },
 ];
 
 export function AdminSidebar() {
@@ -28,9 +26,18 @@ export function AdminSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => {
-    // logout real: remove token
     localStorage.removeItem("token");
     router.replace("/admin/login");
+  };
+
+  const isRouteActive = (href: string) => {
+    // deixa ativo se estiver exatamente na rota
+    if (pathname === href) return true;
+
+    // deixa ativo se estiver em subrota (ex.: /admin/servicos/123)
+    if (href !== "/admin" && pathname.startsWith(href)) return true;
+
+    return false;
   };
 
   const SidebarContent = () => (
@@ -52,7 +59,8 @@ export function AdminSidebar() {
       <nav className="flex-1 p-4">
         <ul className="space-y-1">
           {menuItems.map((item) => {
-            const isActive = pathname === item.href;
+            const active = isRouteActive(item.href);
+
             return (
               <li key={item.href}>
                 <Link
@@ -60,7 +68,7 @@ export function AdminSidebar() {
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    isActive
+                    active
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/50"
                   )}

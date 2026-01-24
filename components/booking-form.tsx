@@ -10,10 +10,25 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CheckCircle, Calendar, Clock, User, Scissors } from 'lucide-react'
 
-import { api } from '@/lib/api'
-import type { Servico, Barbeiro, HorarioDisponivel } from '@/lib/api'
+import { api, type Servico, type Barbeiro, type HorarioDisponivel } from '@/lib/api'
 
 type Step = 'service' | 'barber' | 'datetime' | 'info' | 'success'
+
+// -------- helpers de data (robustos p/ fuso) --------
+function makeLocalDateFromYMD(dateStr: string) {
+  // dateStr = "YYYY-MM-DD"
+  const [y, m, d] = dateStr.split('-').map(Number)
+  // 12:00 evita edge cases de timezone/DST
+  return new Date(y, (m - 1), d, 12, 0, 0, 0)
+}
+
+// JS: Dom=0..Sáb=6 => ISO: Seg=1..Dom=7
+function toIsoDayOfWeek(date: Date) {
+  const js = date.getDay()
+  return js === 0 ? 7 : js
+}
+
+const JS_DAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
 export function BookingForm() {
   const [step, setStep] = useState<Step>('service')
@@ -46,7 +61,7 @@ export function BookingForm() {
 
   // ------- helpers -------
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T12:00:00')
+    const date = makeLocalDateFromYMD(dateStr)
     return date.toLocaleDateString('pt-BR', {
       weekday: 'long',
       day: 'numeric',
@@ -90,6 +105,10 @@ export function BookingForm() {
     async function loadAvailability() {
       if (!selectedDate || !selectedService || !selectedBarber) return
 
+      const localDate = makeLocalDateFromYMD(selectedDate)
+      const jsDayOfWeek = localDate.getDay() // 0..6
+      const isoDayOfWeek = toIsoDayOfWeek(localDate) // 1..7
+
       setIsLoadingSlots(true)
       setError('')
       setSelectedTime(null)
@@ -97,11 +116,25 @@ export function BookingForm() {
       setSlotsFromApi([])
 
       try {
+        console.log('[DISPONIBILIDADE] Buscando horários para:', {
+          date: selectedDate,
+          dateObjLocal: localDate.toString(),
+          jsDayOfWeek,
+          isoDayOfWeek,
+          dayName: JS_DAY_NAMES[jsDayOfWeek],
+          serviceId: selectedService.id,
+          barberId: selectedBarber.id,
+          serviceName: selectedService.name,
+          barberName: selectedBarber.name
+        })
+
         const slots = await api.listarDisponibilidade({
           date: selectedDate,
           serviceId: selectedService.id,
           barberId: selectedBarber.id
         })
+
+        console.log('[DISPONIBILIDADE] Slots recebidos:', slots)
 
         setSlotsFromApi(slots)
 
@@ -110,8 +143,20 @@ export function BookingForm() {
           available: true
         }))
 
+        console.log('[DISPONIBILIDADE] Slots mapeados:', mapped)
         setTimeSlots(mapped)
+
+        if (slots.length === 0) {
+          console.warn('[DISPONIBILIDADE] ❌ Nenhum horário disponível!')
+          console.warn(`Data selecionada: ${selectedDate} (${JS_DAY_NAMES[jsDayOfWeek]})`)
+          console.warn(`Dia da semana ISO: ${isoDayOfWeek} (Backend espera 1=Seg ... 7=Dom)`)
+          console.warn('Verifique no Admin → Horários:')
+          console.warn(`- Se o barbeiro "${selectedBarber.name}" trabalha na ${JS_DAY_NAMES[jsDayOfWeek]} (dia ${isoDayOfWeek})`)
+          console.warn('- Se o checkbox "Ativo" está marcado')
+          console.warn('- Se há horário configurado (ex: 09:00 até 18:00)')
+        }
       } catch (e: any) {
+        console.error('[DISPONIBILIDADE] Erro:', e)
         setError(e?.message || 'Erro ao carregar horários')
       } finally {
         setIsLoadingSlots(false)

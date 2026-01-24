@@ -2,28 +2,31 @@
 
 import { useState, useEffect } from 'react'
 import { ServiceCard } from './service-card'
+import { BarberCard } from './barber-card'
 import { DatePicker } from './date-picker'
 import { TimeSlots } from './time-slots'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, Calendar, Clock, User } from 'lucide-react'
+import { CheckCircle, Calendar, Clock, User, Scissors } from 'lucide-react'
 
-import { api, type Servico, type HorarioDisponivel } from '@/lib/api'
+import { api } from '@/lib/api'
+import type { Servico, Barbeiro, HorarioDisponivel } from '@/lib/api'
 
-
-type Step = 'service' | 'datetime' | 'info' | 'success'
+type Step = 'service' | 'barber' | 'datetime' | 'info' | 'success'
 
 export function BookingForm() {
   const [step, setStep] = useState<Step>('service')
 
   // catálogo vindo da API
   const [services, setServices] = useState<Servico[]>([])
+  const [barbers, setBarbers] = useState<Barbeiro[]>([])
   const [selectedService, setSelectedService] = useState<Servico | null>(null)
+  const [selectedBarber, setSelectedBarber] = useState<Barbeiro | null>(null)
 
   // seleção do usuário
-  const [selectedDate, setSelectedDate] = useState<string | null>(null) // YYYY-MM-DD
-  const [selectedTime, setSelectedTime] = useState<string | null>(null) // startTime completo: YYYY-MM-DDTHH:mm:ss
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [selectedTime, setSelectedTime] = useState<string | null>(null)
 
   // slots vindos do backend
   const [slotsFromApi, setSlotsFromApi] = useState<HorarioDisponivel[]>([])
@@ -38,6 +41,7 @@ export function BookingForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingSlots, setIsLoadingSlots] = useState(false)
   const [isLoadingServices, setIsLoadingServices] = useState(false)
+  const [isLoadingBarbers, setIsLoadingBarbers] = useState(false)
   const [error, setError] = useState<string>('')
 
   // ------- helpers -------
@@ -51,8 +55,7 @@ export function BookingForm() {
   }
 
   const formatTimeFromIso = (iso: string) => {
-    // iso tipo "2026-01-20T13:30:00"
-    return iso.substring(11, 16) // "13:30"
+    return iso.substring(11, 16)
   }
 
   const formatPrice = (priceCents?: number) => {
@@ -71,10 +74,21 @@ export function BookingForm() {
       .finally(() => setIsLoadingServices(false))
   }, [])
 
-  // ------- carregar disponibilidade quando escolher data+serviço -------
+  // ------- carregar barbeiros -------
+  useEffect(() => {
+    setIsLoadingBarbers(true)
+    setError('')
+
+    api.listarBarbeiros()
+      .then((data) => setBarbers(data))
+      .catch((e: any) => setError(e?.message || 'Erro ao carregar barbeiros'))
+      .finally(() => setIsLoadingBarbers(false))
+  }, [])
+
+  // ------- carregar disponibilidade quando escolher data+serviço+barbeiro -------
   useEffect(() => {
     async function loadAvailability() {
-      if (!selectedDate || !selectedService) return
+      if (!selectedDate || !selectedService || !selectedBarber) return
 
       setIsLoadingSlots(true)
       setError('')
@@ -84,15 +98,13 @@ export function BookingForm() {
 
       try {
         const slots = await api.listarDisponibilidade({
-          date: selectedDate,       // YYYY-MM-DD
+          date: selectedDate,
           serviceId: selectedService.id,
-          barberId: 'any'
+          barberId: selectedBarber.id
         })
 
         setSlotsFromApi(slots)
 
-        // TimeSlots espera { time, available }
-        // Vamos guardar "time" como startTime completo (ISO LocalDateTime)
         const mapped = slots.map((s) => ({
           time: s.startTime,
           available: true
@@ -107,12 +119,21 @@ export function BookingForm() {
     }
 
     loadAvailability()
-  }, [selectedDate, selectedService])
+  }, [selectedDate, selectedService, selectedBarber])
 
   // ------- handlers -------
   const handleServiceSelect = (service: Servico) => {
     setSelectedService(service)
-    // reset do restante
+    setSelectedBarber(null)
+    setSelectedDate(null)
+    setSelectedTime(null)
+    setTimeSlots([])
+    setSlotsFromApi([])
+    setError('')
+  }
+
+  const handleBarberSelect = (barber: Barbeiro) => {
+    setSelectedBarber(barber)
     setSelectedDate(null)
     setSelectedTime(null)
     setTimeSlots([])
@@ -125,18 +146,16 @@ export function BookingForm() {
   }
 
   const handleTimeSelect = (time: string) => {
-    // "time" aqui é o startTime completo (ISO LocalDateTime)
     setSelectedTime(time)
   }
 
   const handleSubmit = async () => {
-    if (!selectedService || !selectedDate || !selectedTime || !clientName || !clientPhone) return
+    if (!selectedService || !selectedBarber || !selectedDate || !selectedTime || !clientName || !clientPhone) return
 
     setIsSubmitting(true)
     setError('')
 
     try {
-      // se o barberId for "any", o backend retornou barbeiroId dentro do slot.
       const chosenSlot = slotsFromApi.find((s) => s.startTime === selectedTime)
       if (!chosenSlot) {
         setError('Selecione um horário válido.')
@@ -146,8 +165,8 @@ export function BookingForm() {
 
       await api.criarAgendamento({
         servicoId: selectedService.id,
-        barbeiroId: chosenSlot.barbeiroId,
-        startTime: chosenSlot.startTime, // já no formato aceito pelo backend
+        barbeiroId: selectedBarber.id,
+        startTime: chosenSlot.startTime,
         clientName,
         clientPhone,
         notes
@@ -164,6 +183,7 @@ export function BookingForm() {
   const resetForm = () => {
     setStep('service')
     setSelectedService(null)
+    setSelectedBarber(null)
     setSelectedDate(null)
     setSelectedTime(null)
     setClientName('')
@@ -193,6 +213,10 @@ export function BookingForm() {
             <div className="flex items-center gap-3">
               <User className="w-5 h-5 text-primary" />
               <span className="text-foreground">{clientName}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Scissors className="w-5 h-5 text-primary" />
+              <span className="text-foreground">{selectedBarber?.name}</span>
             </div>
             <div className="flex items-center gap-3">
               <Calendar className="w-5 h-5 text-primary" />
@@ -226,23 +250,23 @@ export function BookingForm() {
 
       {/* Progress Steps */}
       <div className="flex items-center justify-center gap-2 mb-8">
-        {(['service', 'datetime', 'info'] as const).map((s, i) => (
+        {(['service', 'barber', 'datetime', 'info'] as const).map((s, i) => (
           <div key={s} className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                 step === s
                   ? 'bg-primary text-primary-foreground'
-                  : ['service', 'datetime', 'info'].indexOf(step) > i
+                  : ['service', 'barber', 'datetime', 'info'].indexOf(step) > i
                   ? 'bg-primary/20 text-primary'
                   : 'bg-secondary text-muted-foreground'
               }`}
             >
               {i + 1}
             </div>
-            {i < 2 && (
+            {i < 3 && (
               <div
                 className={`w-12 h-0.5 mx-2 ${
-                  ['service', 'datetime', 'info'].indexOf(step) > i ? 'bg-primary' : 'bg-border'
+                  ['service', 'barber', 'datetime', 'info'].indexOf(step) > i ? 'bg-primary' : 'bg-border'
                 }`}
               />
             )}
@@ -268,7 +292,6 @@ export function BookingForm() {
                 <ServiceCard
                   key={service.id}
                   service={{
-                    // Adapter para o tipo que seu ServiceCard espera
                     id: service.id,
                     name: service.name,
                     duration: service.durationMin,
@@ -282,12 +305,51 @@ export function BookingForm() {
           )}
 
           <Button
-            onClick={() => setStep('datetime')}
+            onClick={() => setStep('barber')}
             disabled={!selectedService}
             className="w-full"
           >
             Continuar
           </Button>
+        </div>
+      )}
+
+      {step === 'barber' && (
+        <div>
+          <h2 className="font-serif text-2xl font-bold text-foreground mb-2 text-center">
+            Escolha o Barbeiro
+          </h2>
+          <p className="text-muted-foreground mb-6 text-center">
+            Selecione o profissional de sua preferência
+          </p>
+
+          {isLoadingBarbers ? (
+            <p className="text-center text-muted-foreground">Carregando barbeiros...</p>
+          ) : (
+            <div className="grid gap-3 mb-6">
+              {barbers.map((barber) => (
+                <BarberCard
+                  key={barber.id}
+                  barber={barber}
+                  selected={selectedBarber?.id === barber.id}
+                  onSelect={() => handleBarberSelect(barber)}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setStep('service')} className="flex-1">
+              Voltar
+            </Button>
+            <Button
+              onClick={() => setStep('datetime')}
+              disabled={!selectedBarber}
+              className="flex-1"
+            >
+              Continuar
+            </Button>
+          </div>
         </div>
       )}
 
@@ -314,12 +376,7 @@ export function BookingForm() {
                 <p className="text-sm text-muted-foreground">Sem horários disponíveis.</p>
               ) : (
                 <TimeSlots
-                  slots={timeSlots.map((s) => ({
-                    ...s,
-                    // se o TimeSlots exibe `time` direto, você pode mostrar só HH:mm nele
-                    // mas mantendo o valor real (startTime) para seleção.
-                    // se seu TimeSlots já formata, pode remover isso.
-                  }))}
+                  slots={timeSlots}
                   selectedTime={selectedTime}
                   onSelect={handleTimeSelect}
                 />
@@ -328,7 +385,7 @@ export function BookingForm() {
           )}
 
           <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setStep('service')} className="flex-1">
+            <Button variant="outline" onClick={() => setStep('barber')} className="flex-1">
               Voltar
             </Button>
             <Button
@@ -358,6 +415,10 @@ export function BookingForm() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Serviço:</span>
                 <span className="text-foreground">{selectedService?.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Barbeiro:</span>
+                <span className="text-foreground">{selectedBarber?.name}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Data:</span>

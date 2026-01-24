@@ -102,7 +102,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-background">
       <AdminSidebar />
 
-      <main className="lg:ml-64 pt-14 lg:pt-0 p-6 max-w-4xl mx-auto space-y-4">
+      <main className="lg:ml-64 pt-14 lg:pt-0 p-6 max-w-5xl space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Agendamentos</h1>
